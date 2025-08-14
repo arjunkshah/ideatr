@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
         if (fixCommand) {
           console.log(`[auto-fix-errors] Running: ${fixCommand}`);
-          const result = await sandbox.process.run({
+          const result = await sandbox.run({
             cmd: fixCommand,
             timeout: 30000
           });

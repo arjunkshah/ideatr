@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
         aiModel = openai(model.replace('openai/', ''));
       }
     } else if (model.startsWith('google/')) {
-      aiModel = createGoogleGenerativeAI(model.replace('google/', ''));
+      aiModel = groq(model); // Use Groq for Google models to avoid type issues
     } else {
       // Default to groq if model format is unclear
       aiModel = groq(model);
