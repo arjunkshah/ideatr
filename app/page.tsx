@@ -2324,11 +2324,22 @@ Focus on the key sections and content, making it clean and modern while preservi
           setActiveTab('preview');
         }
       } else {
-        setScreenshotError(data.error || 'Failed to capture screenshot');
+        // Provide more specific error messages
+        const errorMessage = data.error || 'Failed to capture screenshot';
+        if (errorMessage.includes('timeout')) {
+          setScreenshotError('Screenshot capture timed out. The website might be too complex or slow to load. You can still proceed with cloning.');
+        } else {
+          setScreenshotError(errorMessage);
+        }
       }
     } catch (error) {
       console.error('Failed to capture screenshot:', error);
-      setScreenshotError('Network error while capturing screenshot');
+      const errorMessage = error instanceof Error ? error.message : 'Network error while capturing screenshot';
+      if (errorMessage.includes('timeout')) {
+        setScreenshotError('Screenshot capture timed out. The website might be too complex or slow to load. You can still proceed with cloning.');
+      } else {
+        setScreenshotError(`Screenshot capture failed: ${errorMessage}`);
+      }
     } finally {
       setIsCapturingScreenshot(false);
     }
