@@ -2783,30 +2783,19 @@ Focus on the key sections and content, making it clean and modern.`;
           
           {/* Header */}
           <div className="absolute top-0 left-0 right-0 z-20 px-6 py-4 flex items-center justify-between animate-[fadeIn_0.8s_ease-out]">
-            <img
-              src="/firecrawl-logo-with-fire.webp"
-              alt="Firecrawl"
-              className="h-8 w-auto"
-            />
-            <a 
-              href="https://github.com/mendableai/open-lovable" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-[#36322F] text-white px-3 py-2 rounded-[10px] text-sm font-medium [box-shadow:inset_0px_-2px_0px_0px_#171310,_0px_1px_6px_0px_rgba(58,_33,_8,_58%)] hover:translate-y-[1px] hover:scale-[0.98] hover:[box-shadow:inset_0px_-1px_0px_0px_#171310,_0px_1px_3px_0px_rgba(58,_33,_8,_40%)] active:translate-y-[2px] active:scale-[0.97] active:[box-shadow:inset_0px_1px_1px_0px_#171310,_0px_1px_2px_0px_rgba(58,_33,_8,_30%)] transition-all duration-200"
-            >
-              <FiGithub className="w-4 h-4" />
-              <span>Use this template</span>
-            </a>
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-bold text-white">ideatr</span>
+            </div>
           </div>
           
           {/* Main content */}
           <div className="relative z-10 h-full flex items-center justify-center px-4">
             <div className="text-center max-w-4xl min-w-[600px] mx-auto">
-              {/* Firecrawl-style Header */}
+              {/* ideatr Header */}
               <div className="text-center">
                 <h1 className="text-[2.5rem] lg:text-[3.8rem] text-center text-[#36322F] font-semibold tracking-tight leading-[0.9] animate-[fadeIn_0.8s_ease-out]">
-                  <span className="hidden md:inline">Open Lovable</span>
-                  <span className="md:hidden">Open Lovable</span>
+                  <span className="hidden md:inline">ideatr</span>
+                  <span className="md:hidden">ideatr</span>
                 </h1>
                 <motion.p 
                   className="text-base lg:text-lg max-w-lg mx-auto mt-2.5 text-zinc-500 text-center text-balance"
@@ -2839,7 +2828,7 @@ Focus on the key sections and content, making it clean and modern.`;
                       }
                     }}
                     placeholder=" "
-                    aria-placeholder="https://firecrawl.dev"
+                    aria-placeholder="https://example.com"
                     className="h-[3.25rem] w-full resize-none focus-visible:outline-none focus-visible:ring-orange-500 focus-visible:ring-2 rounded-[18px] text-sm text-[#36322F] px-4 pr-12 border-[.75px] border-border bg-white"
                     style={{
                       boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14, 0 4px 6px #5f4a2e0a, 0 40px 40px -24px #684b2514',
@@ -2854,7 +2843,7 @@ Focus on the key sections and content, making it clean and modern.`;
                     }`}
                   >
                     <span className="text-[#605A57]/50" style={{ fontFamily: 'monospace' }}>
-                      https://firecrawl.dev
+                      https://example.com
                     </span>
                   </div>
                   <button

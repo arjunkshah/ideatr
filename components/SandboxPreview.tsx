@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, ExternalLink, RefreshCw, Terminal } from 'lucide-react';
+import HMRErrorDetector from './HMRErrorDetector';
 
 interface SandboxPreviewProps {
   sandboxId: string;
@@ -19,6 +20,8 @@ export default function SandboxPreview({
   const [previewUrl, setPreviewUrl] = useState<string>('');
   const [showConsole, setShowConsole] = useState(false);
   const [iframeKey, setIframeKey] = useState(0);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [detectedErrors, setDetectedErrors] = useState<Array<{ type: string; message: string; package?: string }>>([]);
 
   useEffect(() => {
     if (sandboxId && type !== 'console') {
@@ -48,7 +51,7 @@ export default function SandboxPreview({
       <div className="flex items-center justify-between bg-gray-800 rounded-lg p-3 border border-gray-700">
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-400">
-            {type === 'vite' ? '⚡ Vite' : '▲ Next.js'} Preview
+            ⚡ Vite Preview
           </span>
           <code className="text-xs bg-gray-900 px-2 py-1 rounded text-blue-400">
             {previewUrl}
@@ -88,18 +91,27 @@ export default function SandboxPreview({
             <div className="text-center">
               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
               <p className="text-sm text-gray-400">
-                {type === 'vite' ? 'Starting Vite dev server...' : 'Starting Next.js dev server...'}
+                Starting Vite dev server...
               </p>
             </div>
           </div>
         )}
         
         <iframe
+          ref={iframeRef}
           key={iframeKey}
           src={previewUrl}
           className="w-full h-[600px] bg-white"
           title={`${type} preview`}
           sandbox="allow-scripts allow-same-origin allow-forms"
+        />
+        
+        {/* Error Detector */}
+        <HMRErrorDetector
+          iframeRef={iframeRef}
+          onErrorDetected={setDetectedErrors}
+          sandboxId={sandboxId}
+          autoFix={true}
         />
       </div>
 
