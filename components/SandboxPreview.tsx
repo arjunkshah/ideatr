@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Loader2, ExternalLink, RefreshCw, Terminal } from 'lucide-react';
+import { Loader2, ExternalLink, RefreshCw, Terminal, Wrench } from 'lucide-react';
 import HMRErrorDetector from './HMRErrorDetector';
 
 interface SandboxPreviewProps {
@@ -35,6 +35,41 @@ export default function SandboxPreview({
     setIframeKey(prev => prev + 1);
   };
 
+  const handleManualAutoFix = async () => {
+    if (!sandboxId) return;
+    
+    try {
+      console.log('[SandboxPreview] Manual auto-fix triggered');
+      
+      // Common missing packages that often cause issues
+      const commonErrors = [
+        { type: 'npm-missing', message: 'Common React packages', package: 'react react-dom' },
+        { type: 'npm-missing', message: 'Common UI packages', package: 'lucide-react' },
+        { type: 'npm-missing', message: 'Common utility packages', package: 'clsx tailwind-merge' }
+      ];
+      
+      const response = await fetch('/api/auto-fix-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sandboxId, errors: commonErrors })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('[SandboxPreview] Manual auto-fix successful:', result.message);
+        // Refresh the iframe after a short delay
+        setTimeout(() => {
+          setIframeKey(prev => prev + 1);
+        }, 2000);
+      } else {
+        console.error('[SandboxPreview] Manual auto-fix failed:', result.error);
+      }
+    } catch (error) {
+      console.error('[SandboxPreview] Manual auto-fix request failed:', error);
+    }
+  };
+
   if (type === 'console') {
     return (
       <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
@@ -64,6 +99,13 @@ export default function SandboxPreview({
             title="Toggle console"
           >
             <Terminal className="w-4 h-4" />
+          </button>
+          <button
+            onClick={handleManualAutoFix}
+            className="p-2 hover:bg-gray-700 rounded transition-colors text-yellow-400"
+            title="Auto-fix common issues"
+          >
+            <Wrench className="w-4 h-4" />
           </button>
           <button
             onClick={handleRefresh}
