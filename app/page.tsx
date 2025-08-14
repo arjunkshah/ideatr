@@ -355,7 +355,7 @@ export default function AISandboxPage() {
     }
   };
 
-  const createSandbox = async (fromHomeScreen = false) => {
+  const createSandbox = async (fromHomeScreen = false): Promise<any> => {
     console.log('[createSandbox] Starting sandbox creation...');
     setLoading(true);
     setShowLoadingBackground(true);
@@ -379,6 +379,9 @@ export default function AISandboxPage() {
         log('Sandbox created successfully!');
         log(`Sandbox ID: ${data.sandboxId}`);
         log(`URL: ${data.url}`);
+        
+        // Return the sandbox data for the promise
+        return data;
         
         // Update URL with sandbox ID
         const newParams = new URLSearchParams(searchParams.toString());
@@ -438,9 +441,12 @@ Tip: I automatically detect and install npm packages from your code imports (lik
       updateStatus('Error', false);
       log(`Failed to create sandbox: ${error.message}`, 'error');
       addChatMessage(`Failed to create sandbox: ${error.message}`, 'system');
+      throw error; // Re-throw to be caught by the promise
     } finally {
       setLoading(false);
     }
+    
+    return null; // Return null if no sandbox was created
   };
 
   const displayStructure = (structure: any) => {
@@ -451,7 +457,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     }
   };
 
-  const applyGeneratedCode = async (code: string, isEdit: boolean = false) => {
+  const applyGeneratedCode = async (code: string, isEdit: boolean = false, overrideSandboxId?: string) => {
     setLoading(true);
     log('Applying AI-generated code...');
     
@@ -475,7 +481,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
           response: code,
           isEdit: isEdit,
           packages: pendingPackages,
-          sandboxId: sandboxData?.sandboxId // Pass the sandbox ID to ensure proper connection
+          sandboxId: overrideSandboxId || sandboxData?.sandboxId // Use override or current sandbox ID
         })
       });
       
@@ -949,7 +955,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     
     // Determine if this is an edit based on whether we have applied code before
     const isEdit = conversationContext.appliedCode.length > 0;
-    await applyGeneratedCode(code, isEdit);
+    await applyGeneratedCode(code, isEdit, sandboxData?.sandboxId);
   };
 
   const renderMainContent = () => {
@@ -1822,7 +1828,8 @@ Tip: I automatically detect and install npm packages from your code imports (lik
         
         if (sandboxData && generatedCode) {
           // Use isEdit flag that was determined at the start
-          await applyGeneratedCode(generatedCode, isEdit);
+          // Use the current sandboxData.sandboxId to ensure we're using the most recent sandbox
+          await applyGeneratedCode(generatedCode, isEdit, sandboxData.sandboxId);
         }
       }
       
@@ -1927,7 +1934,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     
     addChatMessage('Re-applying last generation...', 'system');
     const isEdit = conversationContext.appliedCode.length > 0;
-    await applyGeneratedCode(conversationContext.lastGeneratedCode, isEdit);
+            await applyGeneratedCode(conversationContext.lastGeneratedCode, isEdit, sandboxData?.sandboxId);
   };
 
   // Auto-scroll code display to bottom when streaming
@@ -2362,7 +2369,16 @@ Focus on the key sections and content, making it clean and modern while preservi
     addChatMessage(`Starting to clone ${cleanUrl}...`, 'system');
     
     // Start creating sandbox and capturing screenshot immediately in parallel
-    const sandboxPromise = !sandboxData ? createSandbox(true) : Promise.resolve();
+    let newSandboxId: string | undefined;
+    const sandboxPromise = !sandboxData ? 
+      createSandbox(true).then((result) => {
+        // Capture the new sandbox ID for later use
+        if (result && result.sandboxId) {
+          newSandboxId = result.sandboxId;
+        }
+        return result;
+      }) : 
+      Promise.resolve();
     
     // Only capture screenshot if we don't already have a sandbox (first generation)
     // After sandbox is set up, skip the screenshot phase for faster generation
@@ -2670,7 +2686,8 @@ Focus on the key sections and content, making it clean and modern.`;
           setPromptInput(generatedCode);
           
           // First application for cloned site should not be in edit mode
-          await applyGeneratedCode(generatedCode, false);
+          // Use the new sandbox ID if available, otherwise fall back to current sandboxData
+          await applyGeneratedCode(generatedCode, false, newSandboxId);
           
           addChatMessage(
             `Successfully recreated ${url} as a modern React app${homeContextInput ? ` with your requested context: "${homeContextInput}"` : ''}! The scraped content is now in my context, so you can ask me to modify specific sections or add features based on the original site.`, 
