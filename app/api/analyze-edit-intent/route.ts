@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createGroq } from '@ai-sdk/groq';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateObject } from 'ai';
@@ -11,10 +10,7 @@ const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-});
+
 
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -95,9 +91,7 @@ export async function POST(request: NextRequest) {
     
     // Select the appropriate AI model based on the request
     let aiModel;
-    if (model.startsWith('anthropic/')) {
-      aiModel = anthropic(model.replace('anthropic/', ''));
-    } else if (model.startsWith('openai/')) {
+    if (model.startsWith('openai/')) {
       if (model.includes('gpt-oss')) {
         aiModel = groq(model);
       } else {

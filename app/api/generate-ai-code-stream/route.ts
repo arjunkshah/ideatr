@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createGroq } from '@ai-sdk/groq';
-import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { streamText } from 'ai';
@@ -15,10 +14,7 @@ const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-  baseURL: process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-});
+
 
 const googleGenerativeAI = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY,
@@ -1152,12 +1148,10 @@ CRITICAL: When files are provided in the context:
         const packagesToInstall: string[] = [];
         
         // Determine which provider to use based on model
-        const isAnthropic = model.startsWith('anthropic/');
         const isGoogle = model.startsWith('google/');
         const isOpenAI = model.startsWith('openai/gpt-5');
-        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? googleGenerativeAI : groq));
-        const actualModel = isAnthropic ? model.replace('anthropic/', '') : 
-                           (model === 'openai/gpt-5') ? 'gpt-5' :
+        const modelProvider = isOpenAI ? openai : (isGoogle ? googleGenerativeAI : groq);
+        const actualModel = (model === 'openai/gpt-5') ? 'gpt-5' :
                            (isGoogle ? model.replace('google/', '') : model);
 
         // Make streaming API call with appropriate provider
@@ -1225,7 +1219,7 @@ It's better to have 3 complete files than 10 incomplete files.`
           ],
           maxTokens: 8192, // Reduce to ensure completion
           stopSequences: [] // Don't stop early
-          // Note: Neither Groq nor Anthropic models support tool/function calling in this context
+          // Note: Groq models do not support tool/function calling in this context
           // We use XML tags for package detection instead
         };
         
@@ -1588,8 +1582,6 @@ Provide the complete file content without any truncation. Include all necessary 
                 let completionClient;
                 if (model.includes('gpt') || model.includes('openai')) {
                   completionClient = openai;
-                } else if (model.includes('claude')) {
-                  completionClient = anthropic;
                 } else {
                   completionClient = groq;
                 }
