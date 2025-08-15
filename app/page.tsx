@@ -87,6 +87,7 @@ export default function AISandboxPage() {
   const [fileStructure, setFileStructure] = useState<string>('');
   const [inputMode, setInputMode] = useState<'url' | 'custom'>('url');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [showCustomStyleSelector, setShowCustomStyleSelector] = useState(false);
   
   const [conversationContext, setConversationContext] = useState<{
     scrapedWebsites: Array<{ url: string; content: any; timestamp: Date }>;
@@ -2877,40 +2878,42 @@ Create a fully functional, animated, and interactive web application that users 
                 <motion.p 
                   className="text-base lg:text-lg max-w-lg mx-auto mt-2.5 text-zinc-500 text-center text-balance"
                   animate={{
-                    opacity: showStyleSelector ? 0.7 : 1
+                    opacity: (showStyleSelector || showCustomStyleSelector) ? 0.7 : 1
                   }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                 >
-                  Re-imagine any website, in seconds.
+                  {inputMode === 'url' ? 'Re-imagine any website, in seconds.' : 'Create stunning websites from your imagination.'}
                 </motion.p>
               </div>
               
               <form onSubmit={handleHomeScreenSubmit} className="mt-5 max-w-3xl mx-auto">
-                {/* Input Mode Toggle */}
-                <div className="flex justify-center mb-4">
-                  <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-lg p-1 shadow-sm">
-                    <button
-                      type="button"
-                      onClick={() => setInputMode('url')}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center ${
-                        inputMode === 'url' 
-                          ? 'bg-[#36322F] text-white shadow-sm' 
-                          : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                    >
-                      Clone Website
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInputMode('custom')}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center ${
-                        inputMode === 'custom' 
-                          ? 'bg-[#36322F] text-white shadow-sm' 
-                          : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                    >
-                      Create from Scratch
-                    </button>
+                {/* Input Mode Toggle - Left Right View */}
+                <div className="flex justify-center mb-6">
+                  <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-1 shadow-sm">
+                    <div className="flex">
+                      <button
+                        type="button"
+                        onClick={() => setInputMode('url')}
+                        className={`px-6 py-3 text-sm font-medium rounded-lg transition-all flex items-center justify-center ${
+                          inputMode === 'url' 
+                            ? 'bg-[#36322F] text-white shadow-sm' 
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        Clone Website
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputMode('custom')}
+                        className={`px-6 py-3 text-sm font-medium rounded-lg transition-all flex items-center justify-center ${
+                          inputMode === 'custom' 
+                            ? 'bg-[#36322F] text-white shadow-sm' 
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                      >
+                        Create from Scratch
+                      </button>
+                    </div>
                   </div>
                 </div>
                 
@@ -2958,7 +2961,18 @@ Create a fully functional, animated, and interactive web application that users 
                     <>
                       <textarea
                         value={customPrompt}
-                        onChange={(e) => setCustomPrompt(e.target.value)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setCustomPrompt(value);
+                          
+                          // Show style selector when there's substantial content
+                          if (value.length > 10) {
+                            setTimeout(() => setShowCustomStyleSelector(true), 100);
+                          } else {
+                            setShowCustomStyleSelector(false);
+                            setSelectedStyle(null);
+                          }
+                        }}
                         placeholder=" "
                         aria-placeholder="Describe the website you want to create..."
                         className="h-[3.25rem] w-full resize-none focus-visible:outline-none focus-visible:ring-orange-500 focus-visible:ring-2 rounded-[18px] text-sm text-[#36322F] px-4 pr-12 border-[.75px] border-border bg-white"
@@ -2984,7 +2998,7 @@ Create a fully functional, animated, and interactive web application that users 
                     type="submit"
                     disabled={inputMode === 'url' ? !homeUrlInput.trim() : !customPrompt.trim()}
                     className="absolute top-1/2 transform -translate-y-1/2 right-2 flex h-10 items-center justify-center rounded-md px-3 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title={inputMode === 'url' ? (selectedStyle ? `Clone with ${selectedStyle} Style` : 'Clone Website') : 'Create Website'}
+                    title={inputMode === 'url' ? (selectedStyle ? `Clone with ${selectedStyle} Style` : 'Clone Website') : (selectedStyle ? `Create with ${selectedStyle} Style` : 'Create Website')}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
                       {inputMode === 'url' ? (
@@ -3008,6 +3022,102 @@ Create a fully functional, animated, and interactive web application that users 
                     <div className="overflow-hidden mt-4">
                       <div className={`transition-all duration-500 ease-out transform ${
                         showStyleSelector ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
+                      }`}>
+                    <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-4 shadow-sm">
+                      <p className="text-sm text-gray-600 mb-3 font-medium">How do you want your site to look?</p>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {[
+                          { name: 'Neobrutalist', description: 'Bold colors, thick borders' },
+                          { name: 'Glassmorphism', description: 'Frosted glass effects' },
+                          { name: 'Minimalist', description: 'Clean and simple' },
+                          { name: 'Dark Mode', description: 'Dark theme' },
+                          { name: 'Gradient', description: 'Colorful gradients' },
+                          { name: 'Retro', description: '80s/90s aesthetic' },
+                          { name: 'Modern', description: 'Contemporary design' },
+                          { name: 'Monochrome', description: 'Black and white' }
+                        ].map((style) => (
+                          <button
+                            key={style.name}
+                            type="button"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                // Submit the form
+                                const form = e.currentTarget.closest('form');
+                                if (form) {
+                                  form.requestSubmit();
+                                }
+                              }
+                            }}
+                            onClick={() => {
+                              if (selectedStyle === style.name) {
+                                // Deselect if clicking the same style
+                                setSelectedStyle(null);
+                                // Keep only additional context, remove the style theme part
+                                const currentAdditional = homeContextInput.replace(/^[^,]+theme\s*,?\s*/, '').trim();
+                                setHomeContextInput(currentAdditional);
+                              } else {
+                                // Select new style
+                                setSelectedStyle(style.name);
+                                // Extract any additional context (everything after the style theme)
+                                const currentAdditional = homeContextInput.replace(/^[^,]+theme\s*,?\s*/, '').trim();
+                                setHomeContextInput(style.name.toLowerCase() + ' theme' + (currentAdditional ? ', ' + currentAdditional : ''));
+                              }
+                            }}
+                            className={`p-3 rounded-lg border transition-all ${
+                              selectedStyle === style.name
+                                ? 'border-orange-400 bg-orange-50 text-gray-900 shadow-sm'
+                                : 'border-gray-200 bg-white hover:border-orange-200 hover:bg-orange-50/50 text-gray-700'
+                            }`}
+                          >
+                            <div className="text-sm font-medium">{style.name}</div>
+                            <div className="text-xs text-gray-500 mt-1">{style.description}</div>
+                          </button>
+                        ))}
+                      </div>
+                      
+                      {/* Additional context input - part of the style selector */}
+                      <div className="mt-4 mb-2">
+                        <input
+                          type="text"
+                          value={(() => {
+                            if (!selectedStyle) return homeContextInput;
+                            // Extract additional context by removing the style theme part
+                            const additional = homeContextInput.replace(new RegExp('^' + selectedStyle.toLowerCase() + ' theme\\s*,?\\s*', 'i'), '');
+                            return additional;
+                          })()}
+                          onChange={(e) => {
+                            const additionalContext = e.target.value;
+                            if (selectedStyle) {
+                              setHomeContextInput(selectedStyle.toLowerCase() + ' theme' + (additionalContext.trim() ? ', ' + additionalContext : ''));
+                            } else {
+                              setHomeContextInput(additionalContext);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const form = e.currentTarget.closest('form');
+                              if (form) {
+                                form.requestSubmit();
+                              }
+                            }
+                          }}
+                          placeholder="Add more details: specific features, color preferences..."
+                          className="w-full px-4 py-2 text-sm bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-100 transition-all duration-200"
+                        />
+                      </div>
+                    </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Custom Prompt Style Selector - Slides out when custom prompt has content */}
+                  {inputMode === 'custom' && showCustomStyleSelector && (
+                    <div className="overflow-hidden mt-4">
+                      <div className={`transition-all duration-500 ease-out transform ${
+                        showCustomStyleSelector ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
                       }`}>
                     <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-4 shadow-sm">
                       <p className="text-sm text-gray-600 mb-3 font-medium">How do you want your site to look?</p>
