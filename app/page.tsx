@@ -2377,7 +2377,7 @@ Focus on the key sections and content, making it clean and modern while preservi
       addChatMessage(`Starting to create website from your description...`, 'system');
     }
     
-    // Start creating sandbox and capturing screenshot immediately in parallel
+    // Start creating sandbox immediately in parallel
     let newSandboxId: string | undefined;
     const sandboxPromise = !sandboxData ? 
       createSandbox(true).then((result) => {
@@ -2390,7 +2390,6 @@ Focus on the key sections and content, making it clean and modern while preservi
       Promise.resolve();
     
     // Only capture screenshot if we don't already have a sandbox (first generation) and in URL mode
-    // After sandbox is set up, skip the screenshot phase for faster generation
     if (!sandboxData && inputMode === 'url') {
       captureUrlScreenshot(displayUrl);
     }
@@ -2449,8 +2448,10 @@ Focus on the key sections and content, making it clean and modern while preservi
         
         // Clear preparing design state and switch to generation tab
         setIsPreparingDesign(false);
-        setUrlScreenshot(null); // Clear screenshot when starting generation
-        setTargetUrl(''); // Clear target URL
+        if (inputMode === 'url') {
+          setUrlScreenshot(null); // Clear screenshot when starting generation
+          setTargetUrl(''); // Clear target URL
+        }
         
         // Update loading stage to planning
         setLoadingStage('planning');
@@ -2765,11 +2766,21 @@ Create a fully functional, animated, and interactive web application that users 
           throw new Error('Failed to generate recreation');
         }
         
-        setUrlInput('');
-        setUrlStatus([]);
+        if (inputMode === 'url') {
+          setUrlInput('');
+          setUrlStatus([]);
+          // Clear screenshot and preparing design states to prevent them from showing on next run
+          setUrlScreenshot(null);
+          setIsPreparingDesign(false);
+          setTargetUrl('');
+          setScreenshotError(null);
+        } else {
+          setUrlStatus([]);
+        }
+        
         setHomeContextInput('');
         
-        // Clear generation progress and all screenshot/design states
+        // Clear generation progress
         setGenerationProgress(prev => ({
           ...prev,
           isGenerating: false,
@@ -2777,11 +2788,6 @@ Create a fully functional, animated, and interactive web application that users 
           status: 'Generation complete!'
         }));
         
-        // Clear screenshot and preparing design states to prevent them from showing on next run
-        setUrlScreenshot(null);
-        setIsPreparingDesign(false);
-        setTargetUrl('');
-        setScreenshotError(null);
         setLoadingStage(null); // Clear loading stage
         
         setTimeout(() => {
@@ -2886,24 +2892,24 @@ Create a fully functional, animated, and interactive web application that users 
                     <button
                       type="button"
                       onClick={() => setInputMode('url')}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center ${
                         inputMode === 'url' 
                           ? 'bg-[#36322F] text-white shadow-sm' 
                           : 'text-gray-600 hover:text-gray-800'
                       }`}
                     >
-                      🌐 Clone Website
+                      Clone Website
                     </button>
                     <button
                       type="button"
                       onClick={() => setInputMode('custom')}
-                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                      className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center ${
                         inputMode === 'custom' 
                           ? 'bg-[#36322F] text-white shadow-sm' 
                           : 'text-gray-600 hover:text-gray-800'
                       }`}
                     >
-                      ✨ Create from Scratch
+                      Create from Scratch
                     </button>
                   </div>
                 </div>
