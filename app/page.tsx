@@ -73,6 +73,8 @@ export default function AISandboxPage() {
   const [homeScreenFading, setHomeScreenFading] = useState(false);
   const [homeUrlInput, setHomeUrlInput] = useState('');
   const [homeContextInput, setHomeContextInput] = useState('');
+  const [inputMode, setInputMode] = useState<'url' | 'custom'>('url');
+  const [customPrompt, setCustomPrompt] = useState('');
   const [activeTab, setActiveTab] = useState<'generation' | 'preview'>('preview');
   const [showStyleSelector, setShowStyleSelector] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<string | null>(null);
@@ -2352,21 +2354,165 @@ Focus on the key sections and content, making it clean and modern while preservi
     }
   };
 
+  const startCodeGeneration = async (prompt: string) => {
+    // Clear preparing design state and switch to generation tab
+    setIsPreparingDesign(false);
+    setUrlScreenshot(null); // Clear screenshot when starting generation
+    setTargetUrl(''); // Clear target URL
+    
+    // Update loading stage to planning
+    setLoadingStage('planning');
+    
+    // Brief pause before switching to generation tab
+    setTimeout(() => {
+      setLoadingStage('generating');
+      setActiveTab('generation');
+    }, 1500);
+    
+    setGenerationProgress(prev => ({
+      isGenerating: true,
+      status: 'Initializing AI...',
+      components: [],
+      currentComponent: 0,
+      streamedCode: '',
+      isStreaming: true,
+      isThinking: false,
+      thinkingText: undefined,
+      thinkingDuration: undefined,
+      // Keep previous files until new ones are generated
+      files: prev.files || [],
+      currentFile: undefined,
+      lastProcessedPosition: 0
+    }));
+    
+    const aiResponse = await fetch('/api/generate-ai-code-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        prompt,
+        model: aiModel,
+        context: {
+          sandboxId: sandboxData?.sandboxId,
+          structure: structureContent,
+          conversationContext: conversationContext
+        }
+      })
+    });
+    
+    if (!aiResponse.ok || !aiResponse.body) {
+      throw new Error('Failed to generate code');
+    }
+    
+    const reader = aiResponse.body.getReader();
+    const decoder = new TextDecoder();
+    let generatedCode = '';
+    let explanation = '';
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value);
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            
+            if (data.type === 'status') {
+              setGenerationProgress(prev => ({ ...prev, status: data.message }));
+            } else if (data.type === 'thinking') {
+              setGenerationProgress(prev => ({ 
+                ...prev, 
+                isThinking: true,
+                thinkingText: (prev.thinkingText || '') + data.text
+              }));
+            } else if (data.type === 'thinking_complete') {
+              setGenerationProgress(prev => ({ 
+                ...prev, 
+                isThinking: false,
+                thinkingDuration: data.duration
+              }));
+            } else if (data.type === 'conversation') {
+              // Add conversational text to chat only if it's not code
+              let text = data.text || '';
+              
+              // Skip if it's just code blocks or technical content
+              if (text.includes('<file path=') || text.includes('```') || text.includes('import ') || text.includes('export ')) {
+                continue;
+              }
+              
+              // Only add meaningful conversational content
+              if (text.trim().length > 10 && !text.includes('```')) {
+                addChatMessage(text, 'ai');
+              }
+            } else if (data.type === 'code') {
+              generatedCode += data.text || '';
+              setGenerationProgress(prev => ({ 
+                ...prev, 
+                streamedCode: generatedCode,
+                status: 'Generating code...'
+              }));
+            } else if (data.type === 'explanation') {
+              explanation += data.text || '';
+            } else if (data.type === 'complete') {
+              setGenerationProgress(prev => ({ 
+                ...prev, 
+                isGenerating: false,
+                isStreaming: false,
+                status: 'Generation complete!'
+              }));
+              
+              // Store the generated code in conversation context
+              setConversationContext(prev => ({
+                ...prev,
+                lastGeneratedCode: generatedCode
+              }));
+              
+              // Apply the generated code
+              if (newSandboxId) {
+                await applyGeneratedCode(generatedCode, false, newSandboxId);
+              } else {
+                await applyGeneratedCode(generatedCode, false, sandboxData?.sandboxId);
+              }
+              
+              // Add completion message
+              addChatMessage('Code generation complete! The application has been created and applied to your sandbox.', 'ai');
+              
+              return;
+            }
+          } catch (parseError) {
+            console.error('Error parsing streaming data:', parseError);
+          }
+        }
+      }
+    }
+  };
+
   const handleHomeScreenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!homeUrlInput.trim()) return;
+    
+    // Handle different input modes
+    if (inputMode === 'url' && !homeUrlInput.trim()) return;
+    if (inputMode === 'custom' && !customPrompt.trim()) return;
     
     setHomeScreenFading(true);
     
-    // Clear messages and immediately show the cloning message
+    // Clear messages and immediately show the appropriate message
     setChatMessages([]);
-    let displayUrl = homeUrlInput.trim();
-    if (!displayUrl.match(/^https?:\/\//i)) {
-      displayUrl = 'https://' + displayUrl;
+    
+    if (inputMode === 'url') {
+      let displayUrl = homeUrlInput.trim();
+      if (!displayUrl.match(/^https?:\/\//i)) {
+        displayUrl = 'https://' + displayUrl;
+      }
+      // Remove protocol for cleaner display
+      const cleanUrl = displayUrl.replace(/^https?:\/\//i, '');
+      addChatMessage(`Starting to clone ${cleanUrl}...`, 'system');
+    } else {
+      addChatMessage(`Starting to create website from scratch...`, 'system');
     }
-    // Remove protocol for cleaner display
-    const cleanUrl = displayUrl.replace(/^https?:\/\//i, '');
-    addChatMessage(`Starting to clone ${cleanUrl}...`, 'system');
     
     // Start creating sandbox and capturing screenshot immediately in parallel
     let newSandboxId: string | undefined;
@@ -2380,9 +2526,13 @@ Focus on the key sections and content, making it clean and modern while preservi
       }) : 
       Promise.resolve();
     
-    // Only capture screenshot if we don't already have a sandbox (first generation)
+    // Only capture screenshot for URL mode and if we don't already have a sandbox (first generation)
     // After sandbox is set up, skip the screenshot phase for faster generation
-    if (!sandboxData) {
+    if (inputMode === 'url' && !sandboxData) {
+      let displayUrl = homeUrlInput.trim();
+      if (!displayUrl.match(/^https?:\/\//i)) {
+        displayUrl = 'https://' + displayUrl;
+      }
       captureUrlScreenshot(displayUrl);
     }
     
@@ -2398,37 +2548,135 @@ Focus on the key sections and content, making it clean and modern while preservi
       // Wait for sandbox to be ready (if it's still creating)
       await sandboxPromise;
       
-      // Now start the clone process which will stream the generation
-      setUrlInput(homeUrlInput);
-      setUrlOverlayVisible(false); // Make sure overlay is closed
-      setUrlStatus(['Scraping website content...']);
-      
-      try {
-        // Scrape the website
-        let url = homeUrlInput.trim();
-        if (!url.match(/^https?:\/\//i)) {
-          url = 'https://' + url;
+      // Now start the process which will stream the generation
+      if (inputMode === 'url') {
+        setUrlInput(homeUrlInput);
+        setUrlOverlayVisible(false); // Make sure overlay is closed
+        setUrlStatus(['Scraping website content...']);
+        
+        try {
+          // Scrape the website
+          let url = homeUrlInput.trim();
+          if (!url.match(/^https?:\/\//i)) {
+            url = 'https://' + url;
+          }
+          
+          // Screenshot is already being captured in parallel above
+          
+          const scrapeResponse = await fetch('/api/scrape-url-enhanced', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+          
+          if (!scrapeResponse.ok) {
+            throw new Error('Failed to scrape website');
+          }
+          
+          const scrapeData = await scrapeResponse.json();
+          
+          if (!scrapeData.success) {
+            throw new Error(scrapeData.error || 'Failed to scrape website');
+          }
+          
+          setUrlStatus(['Website scraped successfully!', 'Generating React app...']);
+          
+          // Store scraped data in conversation context
+          setConversationContext(prev => ({
+            ...prev,
+            scrapedWebsites: [...prev.scrapedWebsites, {
+              url: url,
+              content: scrapeData,
+              timestamp: new Date()
+            }],
+            currentProject: `${url} Clone`
+          }));
+          
+          // Generate the prompt for URL mode
+          const prompt = `I want to recreate the ${url} website as a complete React application based on the scraped content below.
+
+${JSON.stringify(scrapeData, null, 2)}
+
+${homeContextInput ? `ADDITIONAL CONTEXT/REQUIREMENTS FROM USER:
+${homeContextInput}
+
+Please incorporate these requirements into the design and implementation.` : ''}
+
+IMPORTANT INSTRUCTIONS:
+- Create a COMPLETE, working React application
+- Implement ALL sections and features from the original site
+- Use Tailwind CSS for all styling (no custom CSS files)
+- Make it responsive and modern
+- Ensure all text content matches the original
+- Create proper component structure
+- Make sure the app actually renders visible content
+- Create ALL components that you reference in imports
+${homeContextInput ? '- Apply the user\'s context/theme requirements throughout the application' : ''}
+
+Focus on the key sections and content, making it clean and modern.`;
+          
+          // Start generation
+          await startCodeGeneration(prompt);
+          
+        } catch (error) {
+          console.error('Error during URL processing:', error);
+          addChatMessage(`Error: ${error instanceof Error ? error.message : 'Failed to process URL'}`, 'error');
+          setUrlStatus(['Error occurred during processing']);
         }
+      } else {
+        // Custom prompt mode
+        setUrlStatus(['Creating website from scratch...']);
         
-        // Screenshot is already being captured in parallel above
+        // Store custom prompt in conversation context
+        setConversationContext(prev => ({
+          ...prev,
+          currentProject: `Custom Website: ${customPrompt.substring(0, 50)}...`
+        }));
         
-        const scrapeResponse = await fetch('/api/scrape-url-enhanced', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
+        // Generate the enhanced prompt for custom mode
+        const enhancedPrompt = `Create a complete, animated, and fully functional React web application based on this description:
+
+${customPrompt}
+
+${selectedStyle ? `STYLE REQUIREMENTS:
+Apply the "${selectedStyle}" design style throughout the application.` : ''}
+
+CRITICAL REQUIREMENTS:
+- Make EVERYTHING animated and functional - all buttons, links, forms, and interactions must work
+- Build ALL pages and components that are mentioned or implied
+- Use Tailwind CSS for all styling with smooth animations and transitions
+- Implement proper routing for multi-page applications
+- Add hover effects, loading states, and interactive feedback
+- Make forms functional with proper validation
+- Include proper error handling and loading states
+- Use modern React patterns (hooks, functional components)
+- Make it fully responsive for all devices
+- Add smooth page transitions and micro-interactions
+- Implement proper state management where needed
+- Create ALL components that you reference in imports
+- Make sure the app actually renders visible content
+
+ANIMATION & INTERACTIVITY REQUIREMENTS:
+- Add CSS transitions and transforms for all interactive elements
+- Implement hover effects on buttons, links, and cards
+- Add loading animations for data fetching
+- Include smooth page transitions
+- Add micro-interactions (button clicks, form submissions, etc.)
+- Use Framer Motion or CSS animations for complex animations
+- Make sure all animations are performant and smooth
+
+AI FUNCTIONALITY INTEGRATION:
+- For any AI features mentioned, integrate with Google's Gemma 3 270M model
+- Use the Hugging Face transformers library for local AI processing
+- Implement proper error handling for AI operations
+- Add loading states for AI processing
+- Make AI features fully functional and responsive
+
+Focus on creating a modern, animated, and fully functional web application that users can actually interact with.`;
         
-        if (!scrapeResponse.ok) {
-          throw new Error('Failed to scrape website');
-        }
-        
-        const scrapeData = await scrapeResponse.json();
-        
-        if (!scrapeData.success) {
-          throw new Error(scrapeData.error || 'Failed to scrape website');
-        }
-        
-        setUrlStatus(['Website scraped successfully!', 'Generating React app...']);
+        // Start generation
+        await startCodeGeneration(enhancedPrompt);
+      }
         
         // Clear preparing design state and switch to generation tab
         setIsPreparingDesign(false);
@@ -2826,55 +3074,136 @@ Focus on the key sections and content, making it clean and modern.`;
               </div>
               
               <form onSubmit={handleHomeScreenSubmit} className="mt-5 max-w-3xl mx-auto">
-                <div className="w-full relative group">
-                  <input
-                    type="text"
-                    value={homeUrlInput}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setHomeUrlInput(value);
-                      
-                      // Check if it's a valid domain
-                      const domainRegex = /^(https?:\/\/)?(([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/?.*)?$/;
-                      if (domainRegex.test(value) && value.length > 5) {
-                        // Small delay to make the animation feel smoother
-                        setTimeout(() => setShowStyleSelector(true), 100);
-                      } else {
-                        setShowStyleSelector(false);
-                        setSelectedStyle(null);
-                      }
-                    }}
-                    placeholder=" "
-                    aria-placeholder="https://example.com"
-                    className="h-[3.25rem] w-full resize-none focus-visible:outline-none focus-visible:ring-orange-500 focus-visible:ring-2 rounded-[18px] text-sm text-[#36322F] px-4 pr-12 border-[.75px] border-border bg-white"
-                    style={{
-                      boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14, 0 4px 6px #5f4a2e0a, 0 40px 40px -24px #684b2514',
-                      filter: 'drop-shadow(rgba(249, 224, 184, 0.3) -0.731317px -0.731317px 35.6517px)'
-                    }}
-                    autoFocus
-                  />
-                  <div 
-                    aria-hidden="true" 
-                    className={`absolute top-1/2 -translate-y-1/2 left-4 pointer-events-none text-sm text-opacity-50 text-start transition-opacity ${
-                      homeUrlInput ? 'opacity-0' : 'opacity-100'
-                    }`}
-                  >
-                    <span className="text-[#605A57]/50" style={{ fontFamily: 'monospace' }}>
-                      https://example.com
-                    </span>
+                {/* Input Mode Toggle */}
+                <div className="flex justify-center mb-4">
+                  <div className="bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl p-1 shadow-sm">
+                    <div className="flex">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInputMode('url');
+                          setShowStyleSelector(false);
+                          setSelectedStyle(null);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          inputMode === 'url'
+                            ? 'bg-[#36322F] text-white shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                        }`}
+                      >
+                        Clone Website
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInputMode('custom');
+                          setShowStyleSelector(false);
+                          setSelectedStyle(null);
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                          inputMode === 'custom'
+                            ? 'bg-[#36322F] text-white shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                        }`}
+                      >
+                        Create from Scratch
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="submit"
-                    disabled={!homeUrlInput.trim()}
-                    className="absolute top-1/2 transform -translate-y-1/2 right-2 flex h-10 items-center justify-center rounded-md px-3 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    title={selectedStyle ? `Clone with ${selectedStyle} Style` : 'Clone Website'}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                      <polyline points="9 10 4 15 9 20"></polyline>
-                      <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
-                    </svg>
-                  </button>
                 </div>
+
+                {/* URL Input Mode */}
+                {inputMode === 'url' && (
+                  <div className="w-full relative group">
+                    <input
+                      type="text"
+                      value={homeUrlInput}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setHomeUrlInput(value);
+                        
+                        // Check if it's a valid domain
+                        const domainRegex = /^(https?:\/\/)?(([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/?.*)?$/;
+                        if (domainRegex.test(value) && value.length > 5) {
+                          // Small delay to make the animation feel smoother
+                          setTimeout(() => setShowStyleSelector(true), 100);
+                        } else {
+                          setShowStyleSelector(false);
+                          setSelectedStyle(null);
+                        }
+                      }}
+                      placeholder=" "
+                      aria-placeholder="https://example.com"
+                      className="h-[3.25rem] w-full resize-none focus-visible:outline-none focus-visible:ring-orange-500 focus-visible:ring-2 rounded-[18px] text-sm text-[#36322F] px-4 pr-12 border-[.75px] border-border bg-white"
+                      style={{
+                        boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14, 0 4px 6px #5f4a2e0a, 0 40px 40px -24px #684b2514',
+                        filter: 'drop-shadow(rgba(249, 224, 184, 0.3) -0.731317px -0.731317px 35.6517px)'
+                      }}
+                      autoFocus
+                    />
+                    <div 
+                      aria-hidden="true" 
+                      className={`absolute top-1/2 -translate-y-1/2 left-4 pointer-events-none text-sm text-opacity-50 text-start transition-opacity ${
+                        homeUrlInput ? 'opacity-0' : 'opacity-100'
+                      }`}
+                    >
+                      <span className="text-[#605A57]/50" style={{ fontFamily: 'monospace' }}>
+                        https://example.com
+                      </span>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!homeUrlInput.trim()}
+                      className="absolute top-1/2 transform -translate-y-1/2 right-2 flex h-10 items-center justify-center rounded-md px-3 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title={selectedStyle ? `Clone with ${selectedStyle} Style` : 'Clone Website'}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <polyline points="9 10 4 15 9 20"></polyline>
+                        <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                      </svg>
+                    </button>
+                  </div>
+                )}
+
+                {/* Custom Prompt Input Mode */}
+                {inputMode === 'custom' && (
+                  <div className="w-full relative group">
+                    <textarea
+                      value={customPrompt}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCustomPrompt(value);
+                        
+                        // Show style selector when there's content
+                        if (value.trim().length > 10) {
+                          setTimeout(() => setShowStyleSelector(true), 100);
+                        } else {
+                          setShowStyleSelector(false);
+                          setSelectedStyle(null);
+                        }
+                      }}
+                      placeholder="Describe your website... (e.g., 'A modern e-commerce site for selling handmade jewelry with a shopping cart, user reviews, and payment integration')"
+                      className="h-[3.25rem] min-h-[3.25rem] max-h-[8rem] w-full resize-none focus-visible:outline-none focus-visible:ring-orange-500 focus-visible:ring-2 rounded-[18px] text-sm text-[#36322F] px-4 pr-12 py-3 border-[.75px] border-border bg-white"
+                      style={{
+                        boxShadow: '0 0 0 1px #e3e1de66, 0 1px 2px #5f4a2e14, 0 4px 6px #5f4a2e0a, 0 40px 40px -24px #684b2514',
+                        filter: 'drop-shadow(rgba(249, 224, 184, 0.3) -0.731317px -0.731317px 35.6517px)'
+                      }}
+                      autoFocus
+                      rows={1}
+                    />
+                    <button
+                      type="submit"
+                      disabled={!customPrompt.trim()}
+                      className="absolute top-1/2 transform -translate-y-1/2 right-2 flex h-10 items-center justify-center rounded-md px-3 text-sm font-medium text-zinc-500 hover:text-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-950 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title={selectedStyle ? `Create with ${selectedStyle} Style` : 'Create Website'}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                        <polyline points="9 10 4 15 9 20"></polyline>
+                        <path d="M20 4v7a4 4 0 0 1-4 4H4"></path>
+                      </svg>
+                    </button>
+                  </div>
+                )}
                   
                   {/* Style Selector - Slides out when valid domain is entered */}
                   {showStyleSelector && (

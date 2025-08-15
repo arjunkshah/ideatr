@@ -22,3 +22,17 @@
   21 |     const fixResults = [];
   22 |
  POST /api/auto-fix-errors 500 in 878ms
+ ○ Compiling / ...
+ ✓ Compiled / in 1695ms
+ GET / 200 in 2102ms
+[auto-fix-errors] Auto-fixing 1 errors for sandbox test-sandbox
+[auto-fix-errors] Error: Error [SandboxError]: 404: sandbox "test-sandbox" doesn't exist or you don't have access to it
+    at async POST (app/api/auto-fix-errors/route.ts:19:20)
+  17 |
+  18 |     // Connect to the sandbox
+> 19 |     const sandbox = await Sandbox.connect(sandboxId, { apiKey: process.env.E2B_API_KEY });
+     |                    ^
+  20 |     
+  21 |     const fixResults = [];
+  22 |
+ POST /api/auto-fix-errors 500 in 268ms
