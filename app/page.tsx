@@ -210,13 +210,20 @@ export default function AISandboxPage() {
     // Only check sandbox status on mount and when user navigates to the page
     checkSandboxStatus();
     
-    // Optional: Check status when window regains focus
+    // Optional: Check status when window regains focus with debouncing
+    let focusTimeout: NodeJS.Timeout;
     const handleFocus = () => {
-      checkSandboxStatus();
+      clearTimeout(focusTimeout);
+      focusTimeout = setTimeout(() => {
+        checkSandboxStatus();
+      }, 1000); // Debounce focus events
     };
     
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearTimeout(focusTimeout);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -337,7 +344,19 @@ export default function AISandboxPage() {
 
   const checkSandboxStatus = async () => {
     try {
-      const response = await fetch('/api/sandbox-status');
+      const response = await fetch('/api/sandbox-status', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // Add timeout to prevent hanging requests
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
       
       if (data.active && data.healthy && data.sandboxData) {
@@ -353,8 +372,12 @@ export default function AISandboxPage() {
       }
     } catch (error) {
       console.error('Failed to check sandbox status:', error);
-      setSandboxData(null);
-      updateStatus('Error', false);
+      // Don't update status on network errors to avoid showing "Error" to user
+      // Only update if it's a real error, not a network timeout
+      if (error instanceof Error && !error.name.includes('AbortError')) {
+        setSandboxData(null);
+        updateStatus('Connection error', false);
+      }
     }
   };
 
