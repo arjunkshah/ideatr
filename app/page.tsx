@@ -2982,19 +2982,6 @@ Focus on the key sections and content, making it clean and modern.`;
           // Switch back to preview tab but keep files
           setActiveTab('preview');
         }, 1000); // Show completion briefly then switch
-      } catch (error: any) {
-        addChatMessage(`Failed to clone website: ${error.message}`, 'system');
-        setUrlStatus([]);
-        setIsPreparingDesign(false);
-        // Also clear generation progress on error
-        setGenerationProgress(prev => ({
-          ...prev,
-          isGenerating: false,
-          isStreaming: false,
-          status: '',
-          // Keep files to display in sidebar
-          files: prev.files
-        }));
       }
     }, 500);
   };
