@@ -2988,10 +2988,12 @@ Create a fully functional, animated, and interactive web application that users 
                           const value = e.target.value;
                           setCustomPrompt(value);
                           
-                          // Show style selector when there's substantial content
-                          if (value.length > 10) {
+                          // Show style selector when there's content (lower threshold for custom prompts)
+                          if (value.length > 5) {
+                            console.log('[Custom Prompt] Showing style selector, length:', value.length);
                             setTimeout(() => setShowCustomStyleSelector(true), 100);
                           } else {
+                            console.log('[Custom Prompt] Hiding style selector, length:', value.length);
                             setShowCustomStyleSelector(false);
                             setSelectedStyle(null);
                           }
@@ -3138,6 +3140,8 @@ Create a fully functional, animated, and interactive web application that users 
                   
                   {/* Custom Prompt Style Selector - Slides out when custom prompt has content */}
                   {inputMode === 'custom' && showCustomStyleSelector && (
+                    console.log('[Style Selector] Rendering custom prompt style selector', { inputMode, showCustomStyleSelector }) || true
+                  ) && (
                     <div className="overflow-hidden mt-4">
                       <div className={`transition-all duration-500 ease-out transform ${
                         showCustomStyleSelector ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
