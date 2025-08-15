@@ -2,43 +2,47 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, context } = await req.json();
+    const { messages, model = 'gemini-2.0-flash-exp' } = await req.json();
     
-    if (!prompt) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
+    if (!messages || !Array.isArray(messages)) {
+      return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
     }
 
-    console.log(`[gemma-ai] Processing AI request: ${prompt.substring(0, 100)}...`);
+    console.log(`[gemma-ai] Processing ${messages.length} messages`);
 
-    // For now, we'll simulate the Gemma 3 270M integration
-    // In a real implementation, you would:
-    // 1. Load the model using transformers
-    // 2. Process the input with proper tokenization
-    // 3. Generate response using the model
-    
-    // Simulated response based on the prompt
-    let response = '';
-    
-    if (prompt.toLowerCase().includes('chat') || prompt.toLowerCase().includes('conversation')) {
-      response = "Hello! I'm an AI assistant powered by Gemma 3 270M. How can I help you today?";
-    } else if (prompt.toLowerCase().includes('analyze') || prompt.toLowerCase().includes('review')) {
-      response = "I've analyzed the content using Gemma 3 270M. Here are my insights...";
-    } else if (prompt.toLowerCase().includes('generate') || prompt.toLowerCase().includes('create')) {
-      response = "I've generated new content using Gemma 3 270M. Here's what I created...";
-    } else {
-      response = "I've processed your request using Gemma 3 270M. Here's my response...";
+    // Use the free Gemini API
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': process.env.GEMINI_API_KEY || ''
+      },
+      body: JSON.stringify({
+        contents: messages.map(msg => ({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }]
+        }))
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[gemma-ai] Gemini API error:`, errorText);
+      throw new Error(`Gemini API error: ${response.status}`);
     }
 
-    // Add some context-specific processing
-    if (context && context.userInput) {
-      response += `\n\nBased on your input: "${context.userInput}", I've provided a personalized response.`;
+    const data = await response.json();
+    
+    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+      throw new Error('Invalid response from Gemini API');
     }
+
+    const aiResponse = data.candidates[0].content.parts[0].text;
 
     return NextResponse.json({
       success: true,
-      response: response,
-      model: 'google/gemma-3-270m',
-      timestamp: new Date().toISOString()
+      response: aiResponse,
+      model: model
     });
 
   } catch (error: any) {
@@ -49,18 +53,17 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET endpoint for model status
 export async function GET() {
   return NextResponse.json({
     success: true,
-    model: 'google/gemma-3-270m',
-    status: 'available',
-    description: 'Google Gemma 3 270M model for local AI processing',
-    capabilities: [
-      'text generation',
-      'conversation',
-      'content analysis',
-      'creative writing'
-    ]
+    message: 'Free AI API endpoint is available',
+    endpoint: '/api/gemma-ai',
+    method: 'POST',
+    body: {
+      messages: [
+        { role: 'user', content: 'Your message here' }
+      ],
+      model: 'gemini-2.0-flash-exp'
+    }
   });
 }
